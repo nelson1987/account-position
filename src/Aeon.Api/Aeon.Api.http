@@ -1,0 +1,6 @@
+@Aeon.Api_HostAddress = http://localhost:5296
+
+GET {{Aeon.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
