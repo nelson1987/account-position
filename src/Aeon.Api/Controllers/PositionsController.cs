@@ -7,6 +7,7 @@ using Polly;
 using Polly.Fallback;
 using Polly.Retry;
 using Polly.Timeout;
+using Serilog;
 using StackExchange.Redis;
 using System.Diagnostics;
 using System.Net;
@@ -54,40 +55,35 @@ namespace Aeon.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> SomeAction(CancellationToken cancellationToken)
+        public async Task<IActionResult> Get(CancellationToken cancellationToken = default)
         {
-            using (Activity activity = Telemetry.LoginActivitySource.StartActivity("SomeWork"))
+            using (Activity activity = Telemetry.LoginActivitySource.StartActivity(nameof(Get)))
             {
+                var listagem = await _repository.Buscar(cancellationToken);
+
                 var client = _httpClientFactory.CreateClient("GitHub");
 
                 var response = await _pipeline.ExecuteAsync(
                     async token =>
                     {
-                        await Task.Delay(5000, token);
-                        //await client.GetStringAsync("/someapi");
+                        //await Task.Delay(5000, token);
+                        //return await client.GetAsync("/someapi");
                         // This causes the action fail, thus using the fallback strategy above
                         //return new HttpResponseMessage(HttpStatusCode.OK);
                         return new HttpResponseMessage(HttpStatusCode.InternalServerError);
                     },
                     CancellationToken.None);
 
-                Console.WriteLine($"Response: {response.StatusCode}");
+                Log.Information($"Response: {response.StatusCode}");
 
-                return Ok();
+                return Ok(listagem);
             }
         }
 
-        //[HttpGet]
-        //public async Task<IActionResult> Get()
-        //{
-        //    var listagem = await _repository.Buscar(CancellationToken.None);
-        //    return Ok(listagem);
-        //}
-
         [HttpPost]
-        public async Task<IActionResult> Post()
+        public async Task<IActionResult> Post(CancellationToken cancellationToken = default)
         {
-            var handle = await _addPositionsHandler.Handler(new AddPositionsCommand("First", "Last", 10.00M), CancellationToken.None);
+            var handle = await _addPositionsHandler.Handler(new AddPositionsCommand("First", "Last", 10.00M), cancellationToken);
             return Created();
         }
     }
