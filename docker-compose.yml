@@ -1,8 +1,222 @@
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.23.0 # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/3702
-    container_name: otel-logzio
-    command: ["--config=/etc/otel-collector-config.yml"]
-    volumes:
-      - ./config.yaml:/etc/otel-collector-config.yml:ro
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.22
     ports:
-      - "4317:4317" # OTLP gRPC receiver
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - testes-elastic
+    environment:
+      discovery.type: single-node
+      ES_JAVA_OPTS: "-Xms1g -Xmx1g"
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.22
+    ports:
+      - "5601:5601"
+    networks:
+      - testes-elastic
+    depends_on:
+      - elasticsearch
+
+networks: 
+  testes-elastic:
+    driver: bridge
+
+# services:
+#   apm-server:
+#     image: docker.elastic.co/apm/apm-server:7.17.22
+#     depends_on:
+#       elasticsearch:
+#         condition: service_healthy
+#       kibana:
+#         condition: service_healthy
+#     cap_add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID"]
+#     cap_drop: ["ALL"]
+#     ports:
+#       - 8200:8200
+#     networks:
+#       - elastic
+#     command: >
+#        apm-server -e
+#          -E apm-server.rum.enabled=true
+#          -E setup.kibana.host=kibana:5601
+#          -E setup.template.settings.index.number_of_replicas=0
+#          -E apm-server.kibana.enabled=true
+#          -E apm-server.kibana.host=kibana:5601
+#          -E output.elasticsearch.hosts=["elasticsearch:9200"]
+#     healthcheck:
+#       interval: 10s
+#       retries: 12
+#       test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:8200/
+# 
+#   elasticsearch:
+#     image: docker.elastic.co/elasticsearch/elasticsearch:7.17.22
+#     environment:
+#       - bootstrap.memory_lock=true
+#       - cluster.name=docker-cluster
+#       - cluster.routing.allocation.disk.threshold_enabled=false
+#       - discovery.type=single-node
+#       - ES_JAVA_OPTS=-XX:UseAVX=2 -Xms1g -Xmx1g
+#       - xpack.security.enabled=true
+#       - xpack.security.authc.api_key.enabled=true
+#       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+#     ulimits:
+#       memlock:
+#         hard: -1
+#         soft: -1
+#     volumes:
+#       - esdata:/usr/share/elasticsearch/data
+#     ports:
+#       - 9200:9200
+#     networks:
+#       - elastic
+#     healthcheck:
+#       interval: 20s
+#       retries: 10
+#       test: curl -s http://localhost:9200/_cluster/health | grep -vq '"status":"red"'
+# 
+#   kibana:
+#     image: docker.elastic.co/kibana/kibana:7.17.22
+#     depends_on:
+#       elasticsearch:
+#         condition: service_healthy
+#     environment:
+#       ELASTICSEARCH_URL: http://elasticsearch:9200
+#       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+#     ports:
+#       - 5601:5601
+#     networks:
+#       - elastic
+#     healthcheck:
+#       interval: 10s
+#       retries: 20
+#       test: curl --write-out 'HTTP %{http_code}' --fail --silent --output /dev/null http://localhost:5601/api/status
+# 
+# volumes:
+#   esdata:
+#     driver: local
+# 
+# networks:
+#   elastic:
+#     driver: bridge
+################ PART 2
+# services:  
+#   elasticsearch:
+#     image: elasticsearch:7.16.1
+#     container_name: elasticsearch
+#     environment:
+#       discovery.type: single-node
+#       ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+#     ports:
+#       - "9200:9200"
+#       - "9300:9300"
+#     healthcheck:
+#       test: ["CMD-SHELL", "curl --silent --fail localhost:9200/_cluster/health || exit 1"]
+#       interval: 10s
+#       timeout: 10s
+#       retries: 3
+#     networks:
+#       - elastic
+#   
+#   logstash:
+#     image: logstash:7.16.1
+#     container_name: logstash
+#     environment:
+#       discovery.seed_hosts: logstash
+#       LS_JAVA_OPTS: "-Xms512m -Xmx512m"
+#     volumes:
+#       - ./logstash/pipeline/logstash-nginx.config:/usr/share/logstash/pipeline/logstash-nginx.config
+#       - ./logstash/nginx.log:/home/nginx.log
+#     ports:
+#       - "5000:5000/tcp"
+#       - "5000:5000/udp"
+#       - "5044:5044"
+#       - "9600:9600"
+#     depends_on:
+#       - elasticsearch
+#     networks:
+#       - elastic
+#     command: logstash -f /usr/share/logstash/pipeline/logstash-nginx.config
+#   
+#   kibana:
+#     image: kibana:7.16.1
+#     container_name: kibana
+#     ports:
+#       - "5601:5601"
+#     depends_on:
+#       - elasticsearch
+#     networks:
+#       - elastic
+#       
+# networks:
+#   default:
+#     driver: bridge
+#   kafka-net:
+#     driver: bridge
+#   elastic:
+#     driver: bridge
+#   logstash:
+#     driver: bridge
+################ PART 1
+# services:
+#   setup:
+#     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+#     healthcheck:
+#       interval: 1s
+#       timeout: 5s
+#       retries: 120
+
+#   es01:
+#     image: docker.elastic.co/elasticsearch/elasticsearch:${STACK_VERSION}
+#     volumes:
+#       - esdata01:/usr/share/elasticsearch/data
+#     ports:
+#       - ${ES_PORT}:9200
+#     environment:
+#       - node.name=es01
+#       - cluster.name=${CLUSTER_NAME}
+#       - discovery.type=single-node
+#       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+#       - bootstrap.memory_lock=true
+#       - xpack.security.enabled=true
+#       - xpack.security.http.ssl.enabled=false
+#       - xpack.security.transport.ssl.enabled=false
+#       - xpack.license.self_generated.type=${LICENSE}
+#     mem_limit: ${MEM_LIMIT}
+#     ulimits:
+#       memlock:
+#         soft: -1
+#         hard: -1
+
+#   kibana:
+#     image: docker.elastic.co/kibana/kibana:${STACK_VERSION}
+#     volumes:
+#       - kibanadata:/usr/share/kibana/data
+#     ports:
+#       - ${KIBANA_PORT}:5601
+#     environment:
+#       - SERVERNAME=kibana
+#       - ELASTICSEARCH_HOSTS=http://es01:9200
+#       - ELASTICSEARCH_USERNAME=kibana_system
+#       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
+#     mem_limit: ${MEM_LIMIT}
+
+#   apm:
+#     image: docker.elastic.co/apm/apm-server:${STACK_VERSION}
+#     ports:
+#       - ${APM_PORT}:8200
+#     command: >
+#       apm-server -e
+#          -E output.elasticsearch.hosts=["es01:9200"]
+#          -E output.elasticsearch.protocol=http
+#          -E output.elasticsearch.username=elastic
+#          -E output.elasticsearch.password=${ELASTIC_PASSWORD}
+#          -E output.elasticsearch.ssl.enabled=false
+#     mem_limit: ${MEM_LIMIT}
+
+# volumes:
+#   esdata01:
+#     driver: local
+#   kibanadata:
+#     driver: local

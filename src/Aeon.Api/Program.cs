@@ -1,5 +1,9 @@
 using Aeon.Application;
-using FluentResults;
+using Elastic.Channels;
+using Elastic.CommonSchema.Serilog;
+using Elastic.Ingest.Elasticsearch.DataStreams;
+using Elastic.Ingest.Elasticsearch;
+using Elastic.Serilog.Sinks;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;
@@ -8,103 +12,128 @@ using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Polly;
-using Polly.Extensions.Http;
 using Polly.Fallback;
 using Polly.Retry;
 using Polly.Timeout;
+using Serilog;
+using Serilog.Events;
+using Serilog.Exceptions;
+using Serilog.Filters;
 using System.Net;
 using System.Net.Mime;
-
-var builder = WebApplication.CreateBuilder(args);
-
-builder.AddServiceDefaults();
-//builder.Services.AddRedisOutputCache(builder.Configuration);
-//builder.AddRedisOutputCache("cache");
-
-var fallbackStrategyOptions = new FallbackStrategyOptions<HttpResponseMessage>
+using Microsoft.AspNetCore.Http.Features;
+try
 {
-    FallbackAction = _ =>
-    {
-        return Outcome.FromResultAsValueTask(new HttpResponseMessage(HttpStatusCode.OK));
-    },
+    var builder = WebApplication.CreateBuilder(args);
+    builder.AddSerilog(builder.Configuration, "API Observability");
+    Log.Information("Starting API");
 
-    ShouldHandle = arguments => arguments.Outcome switch
-    {
-        { Exception: HttpRequestException } => PredicateResult.True(),
-        { Exception: TimeoutRejectedException } => PredicateResult.True(),
-        { Result: HttpResponseMessage response } when response.StatusCode == HttpStatusCode.InternalServerError =>
-            PredicateResult.True(),
-        { Result: HttpResponseMessage response } when response.StatusCode == HttpStatusCode.BadRequest =>
-            PredicateResult.True(),
-        _ => PredicateResult.False(),
-    },
-    OnFallback = _ =>
-    {
-        Console.WriteLine("Fallback!");
-        return default;
-    }
-};
+    Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
+    //builder.Services.AddOpenTelemetry().WithTracing(builder => builder.AddOtlpExporter()
+    //    .AddSource("Login")
+    //    .AddAspNetCoreInstrumentation()
+    //    .AddOtlpExporter()
+    //    .ConfigureResource(resource =>
+    //        resource.AddService(
+    //            serviceName: "Login"))
+    //);
+    //builder.AddServiceDefaults();
+    //builder.Services.AddRedisOutputCache(builder.Configuration);
+    //builder.AddRedisOutputCache("cache");
 
-var retryStrategyOptions = new RetryStrategyOptions<HttpResponseMessage>
+    var fallbackStrategyOptions = new FallbackStrategyOptions<HttpResponseMessage>
+    {
+        FallbackAction = _ =>
+        {
+            return Outcome.FromResultAsValueTask(new HttpResponseMessage(HttpStatusCode.OK));
+        },
+
+        ShouldHandle = arguments => arguments.Outcome switch
+        {
+            { Exception: HttpRequestException } => PredicateResult.True(),
+            { Exception: TimeoutRejectedException } => PredicateResult.True(),
+            { Result: HttpResponseMessage response } when response.StatusCode == HttpStatusCode.InternalServerError =>
+                PredicateResult.True(),
+            { Result: HttpResponseMessage response } when response.StatusCode == HttpStatusCode.BadRequest =>
+                PredicateResult.True(),
+            _ => PredicateResult.False(),
+        },
+        OnFallback = _ =>
+        {
+            Console.WriteLine("Fallback!");
+            return default;
+        }
+    };
+
+    var retryStrategyOptions = new RetryStrategyOptions<HttpResponseMessage>
+    {
+        ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
+                    .HandleResult(r => r.StatusCode == HttpStatusCode.InternalServerError)
+                    .Handle<HttpRequestException>(),
+
+        OnRetry = arguments =>
+        {
+            Console.WriteLine($"Retrying '{arguments.Outcome.Result?.StatusCode}'...");
+            return default;
+        },
+        Delay = TimeSpan.FromMilliseconds(400),
+        BackoffType = DelayBackoffType.Constant,
+        MaxRetryAttempts = 3,
+    };
+    builder.Services.AddSingleton(new ResiliencePipelineBuilder<HttpResponseMessage>()
+                //.AddFallback(fallbackStrategyOptions)
+                .AddRetry(retryStrategyOptions)
+                .AddTimeout(TimeSpan.FromSeconds(20))
+                .Build());
+    //services.AddHostedService<Worker>();
+    builder.Services.AddCore();
+    // Add services to the container.
+
+    builder.Services.AddControllers();
+    // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+    builder.Services.AddEndpointsApiExplorer();
+    builder.Services.AddSwaggerGen();
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddProblemDetails();
+
+    var app = builder.Build();
+
+    // Configure the HTTP request pipeline.
+    //if (app.Environment.IsDevelopment())
+    //{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+    //}
+
+    app.UseHttpsRedirection();
+
+    app.UseAuthorization();
+
+    app.MapControllers();
+
+    //app.MapDefaultEndpoints();
+
+    app.Run();
+}
+catch (Exception ex)
 {
-    ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                .HandleResult(r => r.StatusCode == HttpStatusCode.InternalServerError)
-                .Handle<HttpRequestException>(),
-
-    OnRetry = arguments =>
-    {
-        Console.WriteLine($"Retrying '{arguments.Outcome.Result?.StatusCode}'...");
-        return default;
-    },
-    Delay = TimeSpan.FromMilliseconds(400),
-    BackoffType = DelayBackoffType.Constant,
-    MaxRetryAttempts = 3,
-};
-builder.Services.AddSingleton(new ResiliencePipelineBuilder<HttpResponseMessage>()
-            //.AddFallback(fallbackStrategyOptions)
-            .AddRetry(retryStrategyOptions)
-            .AddTimeout(TimeSpan.FromSeconds(20))
-            .Build());
-//services.AddHostedService<Worker>();
-builder.Services.AddCore();
-// Add services to the container.
-
-builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
-
-var app = builder.Build();
-
-// Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
-//{
-app.UseSwagger();
-app.UseSwaggerUI();
-//}
-
-app.UseHttpsRedirection();
-
-app.UseAuthorization();
-
-app.MapControllers();
-
-//app.MapDefaultEndpoints();
-
-app.Run();
-
+    Log.Fatal(ex, "Host terminated unexpectedly");
+}
+finally
+{
+    Log.Information("Server Shutting down...");
+    Log.CloseAndFlush();
+}
 public partial class Program
 {
-    static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-    {
-        return HttpPolicyExtensions
-            .HandleTransientHttpError()
-            .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.NotFound)
-            .WaitAndRetryAsync(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2,
-                                                                        retryAttempt)));
-    }
+    //static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+    //{
+    //    return HttpPolicyExtensions
+    //        .HandleTransientHttpError()
+    //        .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.NotFound)
+    //        .WaitAndRetryAsync(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2,
+    //                                                                    retryAttempt)));
+    //}
 }
 public static class WaitAndRetryExtensions
 {
@@ -132,27 +161,126 @@ public static class WaitAndRetryExtensions
     }
 }
 
-public static class PollyContextExtensions
-{
-    private static readonly string LoggerKey = "ILogger";
+//public static class PollyContextExtensions
+//{
+//    private static readonly string LoggerKey = "ILogger";
 
-    public static Context WithLogger<T>(this Context context, ILogger logger)
+//    public static Context WithLogger<T>(this Context context, ILogger logger)
+//    {
+//        context[LoggerKey] = logger;
+//        return context;
+//    }
+
+//    public static ILogger GetLogger(this Context context)
+//    {
+//        if (context.TryGetValue(LoggerKey, out object logger))
+//        {
+//            return logger as ILogger;
+//        }
+
+//        return null;
+//    }
+//}
+public static class SerilogExtension
+{
+    public static WebApplicationBuilder AddSerilog(this WebApplicationBuilder builder, IConfiguration configuration, string applicationName)
     {
-        context[LoggerKey] = logger;
-        return context;
+        Log.Logger = new LoggerConfiguration()
+            .ReadFrom.Configuration(configuration)
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
+            .MinimumLevel.Override("System", LogEventLevel.Information)
+            .Enrich.FromLogContext()
+            .Enrich.WithProperty("ApplicationName", $"{applicationName} - {Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}")
+            .Enrich.WithCorrelationId()
+            .Enrich.WithExceptionDetails()
+            .Filter.ByExcluding(Matching.FromSource("Microsoft.AspNetCore.StaticFiles"))
+            .WriteTo.Async(writeTo => writeTo.Elasticsearch(new[] { new Uri(configuration["ElasticsearchSettings:uri"]) }, opts => 
+            {
+                opts.DataStream = new DataStreamName("logs", configuration["ElasticsearchSettings:defaultIndex"], "demo");
+                //opts.BootstrapMethod = BootstrapMethod.Failure;
+            }))
+            //{
+            //    opts.TypeName = null,
+            //    opts.AutoRegisterTemplate = true,
+            //    opts.IndexFormat = configuration["ElasticsearchSettings:defaultIndex"],
+            //    opts.BatchAction = ElasticOpType.Create,
+            //    opts.CustomFormatter = new EcsTextFormatter(),
+            //    opts.ModifyConnectionSettings = x => x.BasicAuthentication(configuration["ElasticsearchSettings:username"], configuration["ElasticsearchSettings:password"])
+            //}))
+            .WriteTo.Async(writeTo => writeTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj} {Properties:j}{NewLine}{Exception}"))
+            .CreateLogger();
+
+        builder.Logging.ClearProviders();
+        builder.Host.UseSerilog(Log.Logger, true);
+
+        return builder;
     }
 
-    public static ILogger GetLogger(this Context context)
+    public static WebApplication UseSerilog(this WebApplication app)
     {
-        if (context.TryGetValue(LoggerKey, out object logger))
+        app.UseMiddleware<ErrorHandlingMiddleware>();
+        app.UseSerilogRequestLogging(opts =>
         {
-            return logger as ILogger;
-        }
+            opts.EnrichDiagnosticContext = LogEnricherExtensions.EnrichFromRequest;
+        });
 
-        return null;
+        return app;
     }
 }
+public static class LogEnricherExtensions
+{
+    public static void EnrichFromRequest(IDiagnosticContext diagnosticContext, HttpContext httpContext)
+    {
+        diagnosticContext.Set("UserName", httpContext?.User?.Identity?.Name);
+        diagnosticContext.Set("ClientIP", httpContext?.Connection?.RemoteIpAddress?.ToString());
+        diagnosticContext.Set("UserAgent", httpContext?.Request?.Headers?["User-Agent"].FirstOrDefault());
+        diagnosticContext.Set("Resource", httpContext?.GetMetricsCurrentResourceName());
+    }
 
+    public static string? GetMetricsCurrentResourceName(this HttpContext httpContext)
+    {
+        if (httpContext == null)
+            throw new ArgumentNullException(nameof(httpContext));
+
+        var endpoint = httpContext?.Features?.Get<IEndpointFeature>()?.Endpoint;
+
+        return endpoint?.Metadata?.GetMetadata<EndpointNameMetadata>()?.EndpointName;
+    }
+}
+public class ErrorHandlingMiddleware
+{
+    private readonly RequestDelegate next;
+
+    public ErrorHandlingMiddleware(RequestDelegate next)
+    {
+        this.next = next;
+    }
+
+    public async Task Invoke(HttpContext context)
+    {
+        try
+        {
+            await next(context);
+        }
+        catch (Exception ex)
+        {
+            await HandleExceptionAsync(context, ex);
+        }
+    }
+
+    private static Task HandleExceptionAsync(HttpContext context, Exception exception)
+    {
+        Log.Error(exception, "Error");
+
+        var code = HttpStatusCode.InternalServerError;
+
+        var result = System.Text.Json.JsonSerializer.Serialize(new { error = exception?.Message });
+
+        context.Response.ContentType = "application/json";
+        context.Response.StatusCode = (int)code;
+        return context.Response.WriteAsync(result);
+    }
+}
 internal sealed class GlobalExceptionHandler : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger;

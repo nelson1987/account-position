@@ -8,6 +8,7 @@ using Polly.Fallback;
 using Polly.Retry;
 using Polly.Timeout;
 using StackExchange.Redis;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -23,6 +24,16 @@ namespace Aeon.Api.Controllers
         public string TargetFramework { get; set; }
         public string MensagemFixa { get; set; }
         public object MensagemVariavel { get; set; }
+    }
+    public static class Telemetry
+    {
+        //...
+
+        // Name it after the service name for your app.
+        // It can come from a config file, constants file, etc.
+        public static readonly ActivitySource LoginActivitySource = new("Login");
+
+        //...
     }
     [ApiController]
     [Route("[controller]")]
@@ -45,23 +56,25 @@ namespace Aeon.Api.Controllers
         [HttpGet]
         public async Task<IActionResult> SomeAction(CancellationToken cancellationToken)
         {
-            var client = _httpClientFactory.CreateClient("GitHub");
+            using (Activity activity = Telemetry.LoginActivitySource.StartActivity("SomeWork"))
+            {
+                var client = _httpClientFactory.CreateClient("GitHub");
 
-            var response = await _pipeline.ExecuteAsync(
-                async token =>
-                {
-                    await Task.Delay(5000, token);
-                    //await client.GetStringAsync("/someapi");
-                    // This causes the action fail, thus using the fallback strategy above
-                    //return new HttpResponseMessage(HttpStatusCode.OK);
-                    return new HttpResponseMessage(HttpStatusCode.InternalServerError);
-                },
-                CancellationToken.None);
+                var response = await _pipeline.ExecuteAsync(
+                    async token =>
+                    {
+                        await Task.Delay(5000, token);
+                        //await client.GetStringAsync("/someapi");
+                        // This causes the action fail, thus using the fallback strategy above
+                        //return new HttpResponseMessage(HttpStatusCode.OK);
+                        return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    },
+                    CancellationToken.None);
 
-            Console.WriteLine($"Response: {response.StatusCode}");
+                Console.WriteLine($"Response: {response.StatusCode}");
 
-            return Ok();
-
+                return Ok();
+            }
         }
 
         //[HttpGet]
