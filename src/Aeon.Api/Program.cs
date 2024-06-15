@@ -7,24 +7,21 @@ using Serilog;
 try
 {
     var builder = WebApplication.CreateBuilder(args);
-    builder.AddSerilogLogBuilder(builder.Configuration, "API.Observability");
+    builder.AddSerilogLogBuilder("API.Observability");
     Log.Information("Starting API");
-
-//    Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
-
+    //Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
     builder.AddServiceDefaults();
     builder.AddRedisOutputCache();
     builder.AddPollyRetryPolicy();
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddProblemDetails();
     //services.AddHostedService<Worker>();
     builder.Services.AddCore();
-    // Add services to the container.
-
+    //================================
     builder.Services.AddControllers();
     // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen();
-    builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-    builder.Services.AddProblemDetails();
 
     var app = builder.Build();
 
@@ -36,14 +33,10 @@ try
     //}
 
     app.UseHttpsRedirection();
-
     app.UseAuthorization();
-
     app.MapControllers();
-
     app.AddRedisHealthCheck();
     app.MapDefaultEndpoints();
-
     app.Run();
 }
 catch (Exception ex)

@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aeon.Application;
 
-public static class Dependencies 
+public static class Dependencies
 {
     public static IServiceCollection AddCore(this IServiceCollection services)
     {

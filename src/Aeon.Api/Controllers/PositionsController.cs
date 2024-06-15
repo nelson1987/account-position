@@ -16,16 +16,6 @@ using System.Threading;
 
 namespace Aeon.Api.Controllers
 {
-
-    public class ResultadoContador
-    {
-        public int ValorAtual { get; set; }
-        public string Local { get; set; }
-        public string Kernel { get; set; }
-        public string TargetFramework { get; set; }
-        public string MensagemFixa { get; set; }
-        public object MensagemVariavel { get; set; }
-    }
     public static class Telemetry
     {
         //...
@@ -74,7 +64,7 @@ namespace Aeon.Api.Controllers
                     },
                     CancellationToken.None);
 
-                Log.Information($"Response: {response.StatusCode}");
+                _logger.LogInformation($"Response: {response.StatusCode}");
 
                 return Ok(listagem);
             }

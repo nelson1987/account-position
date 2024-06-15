@@ -11,17 +11,19 @@ namespace Aeon.Api.Extensions;
 
 public static class SerilogLogBuilder
 {
-    public static WebApplicationBuilder AddSerilogLogBuilder(this WebApplicationBuilder builder, IConfiguration configuration, string applicationName)
+    public static IHostApplicationBuilder AddSerilogLogBuilder(this WebApplicationBuilder builder, string applicationName)
     {
+        IConfiguration configuration = builder.Configuration;
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(configuration)
-            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Information)
             .MinimumLevel.Override("System", LogEventLevel.Information)
             .Enrich.FromLogContext()
             .Enrich.WithProperty("ApplicationName", $"{applicationName} - {Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}")
             .Enrich.WithCorrelationId()
             .Enrich.WithExceptionDetails()
             .Filter.ByExcluding(Matching.FromSource("Microsoft.AspNetCore.StaticFiles"))
+            .Filter.ByExcluding(Matching.FromSource("Microsoft.AspNetCore.Hosting.Diagnostics"))
             .WriteTo.Async(writeTo => writeTo.Elasticsearch(new[] { new Uri(configuration["ElasticsearchSettings:uri"]) }, opts =>
             {
                 opts.DataStream = new DataStreamName("logs", applicationName, "demo");
@@ -44,7 +46,7 @@ public static class SerilogLogBuilder
         return builder;
     }
 
-    public static WebApplication UseSerilog(this WebApplication app)
+    private static WebApplication UseSerilog(this WebApplication app)
     {
         app.UseMiddleware<ErrorHandlingMiddleware>();
         app.UseSerilogRequestLogging(opts =>

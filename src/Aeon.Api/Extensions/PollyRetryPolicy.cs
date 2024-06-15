@@ -10,6 +10,7 @@ public static class PollyRetryPolicy
 {
     public static IHostApplicationBuilder AddPollyRetryPolicy(this IHostApplicationBuilder builder)
     {
+
         var fallbackStrategyOptions = new FallbackStrategyOptions<HttpResponseMessage>
         {
             FallbackAction = _ =>
