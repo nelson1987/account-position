@@ -1,5 +1,7 @@
 using Aeon.Application.Features.Positions.AddPositions;
 using Aeon.Domain.Repositories;
+using Azure.Core;
+using Elastic.CommonSchema;
 using FluentResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -33,39 +35,20 @@ namespace Aeon.Api.Controllers
         private readonly ILogger<PositionsController> _logger;
         private readonly IAddPositionsHandler _addPositionsHandler;
         private readonly IRepository _repository;
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly ResiliencePipeline<HttpResponseMessage> _pipeline;
-        public PositionsController(ILogger<PositionsController> logger, IAddPositionsHandler addPositionsHandler, IRepository repository, IHttpClientFactory httpClientFactory, ResiliencePipeline<HttpResponseMessage> pipeline)
+        public PositionsController(ILogger<PositionsController> logger, IAddPositionsHandler addPositionsHandler, IRepository repository)
         {
             _logger = logger;
             _addPositionsHandler = addPositionsHandler;
             _repository = repository;
-            _httpClientFactory = httpClientFactory;
-            _pipeline = pipeline;
         }
 
         [HttpGet]
         public async Task<IActionResult> Get(CancellationToken cancellationToken = default)
         {
+            _logger.LogInformation($"{nameof(Get)}");
             using (Activity activity = Telemetry.LoginActivitySource.StartActivity(nameof(Get)))
             {
                 var listagem = await _repository.Buscar(cancellationToken);
-
-                var client = _httpClientFactory.CreateClient("GitHub");
-
-                var response = await _pipeline.ExecuteAsync(
-                    async token =>
-                    {
-                        //await Task.Delay(5000, token);
-                        //return await client.GetAsync("/someapi");
-                        // This causes the action fail, thus using the fallback strategy above
-                        //return new HttpResponseMessage(HttpStatusCode.OK);
-                        return new HttpResponseMessage(HttpStatusCode.InternalServerError);
-                    },
-                    CancellationToken.None);
-
-                _logger.LogInformation($"Response: {response.StatusCode}");
-
                 return Ok(listagem);
             }
         }
@@ -73,6 +56,7 @@ namespace Aeon.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> Post(CancellationToken cancellationToken = default)
         {
+            _logger.LogInformation($"{nameof(Post)}");
             var handle = await _addPositionsHandler.Handler(new AddPositionsCommand("First", "Last", 10.00M), cancellationToken);
             return Created();
         }

@@ -1,8 +1,6 @@
 using Aeon.Api.Extensions;
 using Aeon.Api.Handlers;
 using Aeon.Application;
-using Polly;
-using Polly.Retry;
 using Serilog;
 try
 {
@@ -10,6 +8,7 @@ try
     builder.AddSerilogLogBuilder("API.Observability");
     Log.Information("Starting API");
     //Log.Logger = new LoggerConfiguration().WriteTo.Console().CreateLogger();
+
     builder.AddServiceDefaults();
     builder.AddRedisOutputCache();
     builder.AddPollyRetryPolicy();
@@ -50,39 +49,6 @@ finally
 }
 public partial class Program
 {
-    //static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
-    //{
-    //    return HttpPolicyExtensions
-    //        .HandleTransientHttpError()
-    //        .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.NotFound)
-    //        .WaitAndRetryAsync(6, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2,
-    //                                                                    retryAttempt)));
-    //}
-}
-public static class WaitAndRetryExtensions
-{
-    public static AsyncRetryPolicy CreateWaitAndRetryPolicy(IEnumerable<TimeSpan> sleepsBeetweenRetries)
-    {
-        return Policy
-            .Handle<Exception>()
-            .WaitAndRetryAsync(
-                sleepDurations: sleepsBeetweenRetries,
-                onRetry: (_, span, retryCount, _) =>
-                {
-                    var previousBackgroundColor = Console.BackgroundColor;
-                    var previousForegroundColor = Console.ForegroundColor;
-
-                    Console.BackgroundColor = ConsoleColor.Yellow;
-                    Console.ForegroundColor = ConsoleColor.Black;
-
-                    Console.Out.WriteLineAsync($" ***** {DateTime.Now:HH:mm:ss} | " +
-                        $"Retentativa: {retryCount} | " +
-                        $"Tempo de Espera em segundos: {span.TotalSeconds} **** ");
-
-                    Console.BackgroundColor = previousBackgroundColor;
-                    Console.ForegroundColor = previousForegroundColor;
-                });
-    }
 }
 
 //public static class PollyContextExtensions
