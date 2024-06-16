@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
-using OpenTelemetry;
 
 namespace Aeon.Api.Extensions;
 public static class OpenTelematryLogOptions

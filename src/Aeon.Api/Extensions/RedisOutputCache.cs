@@ -5,7 +5,7 @@ using System.Net.Mime;
 namespace Aeon.Api.Extensions;
 public static class RedisOutputCache
 {
-    public static IHostApplicationBuilder AddRedisOutputCache(this IHostApplicationBuilder builder) 
+    public static IHostApplicationBuilder AddRedisOutputCache(this IHostApplicationBuilder builder)
     {
         builder.Services.AddRedisOutputCache(builder.Configuration);
         return builder;

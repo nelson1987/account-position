@@ -1,4 +1,6 @@
-﻿using Polly;
+﻿using Microsoft.Extensions.Logging;
+using Polly;
+using System.Net;
 
 namespace Aeon.Infrastructure.ExternalServices;
 public interface IHttpGitHubClientFactory
@@ -7,18 +9,25 @@ public interface IHttpGitHubClientFactory
 }
 public class HttpGitHubClientFactory : IHttpGitHubClientFactory
 {
+    private readonly ILogger<HttpGitHubClientFactory> _logger;
     private readonly HttpClient _client;
-    private readonly AsyncPolicy _policy;
-    public HttpGitHubClientFactory(IHttpClientFactory factory, AsyncPolicy policy)
+    private readonly ResiliencePipeline<HttpResponseMessage> _policy;
+    public HttpGitHubClientFactory(ILogger<HttpGitHubClientFactory> logger, IHttpClientFactory factory, ResiliencePipeline<HttpResponseMessage> policy)
     {
         _client = factory.CreateClient("Github");
         _policy = policy;
+        _logger = logger;
     }
     public async Task<HttpResponseMessage> BuscarApi()
     {
-        //var url = $"{_client.BaseAddress}/anuncios/getAll?skip={skip}&take={take}";
-        //return await _policy.ExecuteAsync(() => _client.GetFromJsonAsync<List<AnunciosResponse>>(url));
-        //return await _client.GetAsync("/someapi");
-        return await _policy.ExecuteAsync(() => _client.GetAsync("/someapi"));
+        var response = await _policy.ExecuteAsync(
+            async token =>
+            {
+                //await await _client.GetAsync("/someapi")
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+            },
+            CancellationToken.None);
+        _logger.LogInformation($"Response: {response.StatusCode}");
+        return response;
     }
 }

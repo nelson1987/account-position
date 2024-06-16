@@ -19,6 +19,6 @@ public static class Dependencies
     {
         services.AddScoped<IAddPositionsHandler, AddPositionsHandler>();
         services.AddScoped<IValidator<AddPositionsCommand>, AddPositionsValidator>();
-        return services; 
+        return services;
     }
 }

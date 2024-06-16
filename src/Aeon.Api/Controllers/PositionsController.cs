@@ -1,20 +1,7 @@
 using Aeon.Application.Features.Positions.AddPositions;
 using Aeon.Domain.Repositories;
-using Azure.Core;
-using Elastic.CommonSchema;
-using FluentResults;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using Polly;
-using Polly.Fallback;
-using Polly.Retry;
-using Polly.Timeout;
-using Serilog;
-using StackExchange.Redis;
 using System.Diagnostics;
-using System.Net;
-using System.Net.Http;
-using System.Threading;
 
 namespace Aeon.Api.Controllers
 {

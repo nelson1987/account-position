@@ -1,9 +1,9 @@
-﻿using Polly.Fallback;
+﻿using Polly;
+using Polly.Fallback;
 using Polly.Retry;
-using Polly;
-using System.Net;
 using Polly.Timeout;
 using Serilog;
+using System.Net;
 
 namespace Aeon.Api.Extensions;
 public static class PollyRetryPolicy
@@ -22,8 +22,8 @@ public static class PollyRetryPolicy
             {
                 { Exception: HttpRequestException } => PredicateResult.True(),
                 { Exception: TimeoutRejectedException } => PredicateResult.True(),
-                { Result: HttpResponseMessage response } 
-                    when response.StatusCode == HttpStatusCode.InternalServerError || 
+                { Result: HttpResponseMessage response }
+                    when response.StatusCode == HttpStatusCode.InternalServerError ||
                          response.StatusCode == HttpStatusCode.BadRequest =>
                     PredicateResult.True(),
                 _ => PredicateResult.False(),

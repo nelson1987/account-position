@@ -1,11 +1,11 @@
-﻿using Microsoft.AspNetCore.Http.Features;
-using Serilog.Events;
-using Serilog.Filters;
-using Serilog;
-using System.Net;
-using Serilog.Exceptions;
+﻿using Elastic.Ingest.Elasticsearch.DataStreams;
 using Elastic.Serilog.Sinks;
-using Elastic.Ingest.Elasticsearch.DataStreams;
+using Microsoft.AspNetCore.Http.Features;
+using Serilog;
+using Serilog.Events;
+using Serilog.Exceptions;
+using Serilog.Filters;
+using System.Net;
 
 namespace Aeon.Api.Extensions;
 

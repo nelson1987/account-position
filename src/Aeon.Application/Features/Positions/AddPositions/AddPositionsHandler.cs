@@ -5,8 +5,6 @@ using Aeon.Infrastructure.Repositories;
 using FluentResults;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
-using Polly;
-using System.Net;
 
 namespace Aeon.Application.Features.Positions.AddPositions;
 
@@ -21,15 +19,13 @@ public class AddPositionsHandler : IAddPositionsHandler
     private readonly IValidator<AddPositionsCommand> _validator;
     private readonly IRepository _repository;
     private readonly IHttpGitHubClientFactory _httpClientFactory;
-    private readonly ResiliencePipeline<HttpResponseMessage> _pipeline;
 
-    public AddPositionsHandler(ILogger<Repository> logger, IValidator<AddPositionsCommand> validator, IRepository repository, IHttpGitHubClientFactory httpClientFactory, ResiliencePipeline<HttpResponseMessage> pipeline)
+    public AddPositionsHandler(ILogger<Repository> logger, IValidator<AddPositionsCommand> validator, IRepository repository, IHttpGitHubClientFactory httpClientFactory)
     {
         _logger = logger;
         _validator = validator;
         _repository = repository;
         _httpClientFactory = httpClientFactory;
-        _pipeline = pipeline;
     }
 
     public async Task<Result<AddPositionsResponse>> Handler(AddPositionsCommand request, CancellationToken cancellationToken = default)
@@ -42,17 +38,18 @@ public class AddPositionsHandler : IAddPositionsHandler
             return Result.Fail("erro ao validar");
         }
 
-        var response = await _pipeline.ExecuteAsync(
-            async token =>
-            {
-                //await Task.Delay(5000, token);
-                //return await _httpClientFactory.BuscarApi();
-                // This causes the action fail, thus using the fallback strategy above
-                //return new HttpResponseMessage(HttpStatusCode.OK);
-                return new HttpResponseMessage(HttpStatusCode.InternalServerError);
-            },
-            CancellationToken.None);
-        _logger.LogInformation($"Response: {response.StatusCode}");
+        //var response = await _pipeline.ExecuteAsync(
+        //    async token =>
+        //    {
+        //        //await Task.Delay(5000, token);
+        //        //return
+        await _httpClientFactory.BuscarApi();
+        //        // This causes the action fail, thus using the fallback strategy above
+        //        //return new HttpResponseMessage(HttpStatusCode.OK);
+        //        return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        //    },
+        //    CancellationToken.None);
+        //_logger.LogInformation($"Response: {response.StatusCode}");
 
         var product = request.MapTo<Produto>();
         product.isActive = true;
